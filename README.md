@@ -1,2 +1,241 @@
 # multipass
-A cli that uses Vercel's Chat SDK to allow testing message channels against OpenClaw
+
+Standalone CLI for deterministic messaging-provider tests. `multipass` is config-driven, CI-friendly, and deliberately has no `openclaw` dependency. It now models the full OpenClaw messaging matrix: `bluebubbles`, `discord`, `feishu`, `googlechat`, `imessage`, `irc`, `line`, `matrix`, `mattermost`, `msteams`, `nextcloudtalk`, `nostr`, `signal`, `slack`, `synologychat`, `telegram`, `tlon`, `twitch`, `webchat`, `whatsapp`, `zalo`, `zalouser`.
+
+The v1 shape is:
+
+- built-in `loopback` provider for local development and contract tests
+- native `slack` provider backed by the Chat SDK Slack adapter
+- `script` bridge for every other OpenClaw-supported messaging channel
+- webhook-backed recorder mode for Slack `watch` / `webhook`
+- nonce-based `send`, `roundtrip`, `agent`, `probe`, `run`, `watch`, `doctor`
+- text output by default, stable `--json` for automation
+- core provider model aligned with Vercel Chat SDK concepts
+
+## Install
+
+```bash
+pnpm install
+pnpm build
+pnpm verify
+```
+
+Run locally:
+
+```bash
+pnpm dev fixtures --config fixtures/examples/multipass.example.yaml
+pnpm dev roundtrip loopback-roundtrip --config fixtures/examples/multipass.example.yaml
+```
+
+## Quality Gate
+
+Local and CI use the same gate:
+
+```bash
+pnpm verify
+```
+
+That enforces:
+
+- `oxlint` with strict correctness/suspicious rules plus import and Vitest checks
+- `tsc --noEmit` under `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`
+- Vitest coverage with global thresholds of 80% for statements, lines, and functions
+- `oxfmt --check` formatting
+
+GitHub Actions runs the same `pnpm verify` flow on pushes to `main` and pull requests, and uploads the coverage artifact.
+
+## Config
+
+Config file search order:
+
+1. `--config <path>`
+2. `./multipass.yaml`
+3. `./multipass.yml`
+4. `./multipass.json`
+
+Top-level shape:
+
+```yaml
+configVersion: 1
+userName: multipass
+providers:
+  local:
+    adapter: loopback | script | slack
+    platform: see support matrix below
+fixtures:
+  - id: string
+    provider: string
+    accountId: string?
+    mode: probe | send | roundtrip | agent
+    target:
+      id: string
+      channelId: string?
+      threadId: string?
+      behavior: echo | agent | sink?
+    inboundMatch:
+      author: assistant | user | system | any
+      strategy: contains | exact | regex
+      nonce: contains | exact | ignore
+      pattern: string?
+    timeoutMs: number
+    retries: number
+    tags: string[]
+    env: string[]
+    notes: string?
+```
+
+Credentials stay in env, never in fixtures.
+
+## Support Matrix
+
+- `ready`: `loopback`, native `slack`
+- `bridge`: `bluebubbles`, `discord`, `feishu`, `googlechat`, `imessage`, `irc`, `line`, `matrix`, `mattermost`, `msteams`, `nextcloudtalk`, `nostr`, `signal`, `synologychat`, `telegram`, `tlon`, `twitch`, `webchat`, `whatsapp`, `zalo`, `zalouser`
+- Plugin-backed in OpenClaw, still supported through the bridge: `feishu`, `line`, `matrix`, `mattermost`, `msteams`, `nextcloudtalk`, `nostr`, `synologychat`, `tlon`, `twitch`, `zalo`, `zalouser`
+- Legacy in OpenClaw, still supported through the bridge: `imessage`
+
+Native Slack provider options:
+
+```yaml
+providers:
+  slack-native:
+    adapter: slack
+    platform: slack
+    slack:
+      recorder:
+        path: ./.multipass/recorders/slack-native.jsonl
+      webhook:
+        host: 127.0.0.1
+        port: 8787
+        path: /slack/events
+        publicUrl: https://example.ngrok.app/slack/events # optional but useful
+```
+
+`watch` (alias: `webhook`) starts the local Slack webhook listener and tails the recorded inbound JSONL stream. `roundtrip` and `agent` also start the webhook listener on demand, and will reuse an already-running listener on the configured port.
+
+## Example fixtures
+
+See [fixtures/examples/multipass.example.yaml](/Users/steipete/Projects/multipass/fixtures/examples/multipass.example.yaml).
+
+Full OpenClaw bridge matrix example:
+
+[openclaw-supported.yaml](/Users/steipete/Projects/multipass/fixtures/examples/openclaw-supported.yaml)
+
+Loopback:
+
+```bash
+pnpm dev roundtrip loopback-roundtrip --config fixtures/examples/multipass.example.yaml
+pnpm dev agent loopback-agent --config fixtures/examples/multipass.example.yaml
+```
+
+Native Slack:
+
+```bash
+SLACK_BOT_TOKEN=xoxb-... \
+SLACK_SIGNING_SECRET=... \
+pnpm dev probe slack-native-agent --config fixtures/examples/multipass.example.yaml
+
+SLACK_BOT_TOKEN=xoxb-... \
+SLACK_SIGNING_SECRET=... \
+pnpm dev watch slack-native-agent --config fixtures/examples/multipass.example.yaml
+```
+
+Script bridge:
+
+```bash
+OPENCLAW_URL=http://127.0.0.1:18789 \
+OPENCLAW_TOKEN=secret \
+pnpm dev probe slack-openclaw-demo --config fixtures/examples/multipass.example.yaml
+```
+
+Full bridge matrix bootstrap:
+
+```bash
+OPENCLAW_URL=http://127.0.0.1:18789 \
+OPENCLAW_TOKEN=secret \
+pnpm dev providers --config fixtures/examples/openclaw-supported.yaml
+```
+
+## Commands
+
+```bash
+multipass providers
+multipass fixtures
+multipass probe <fixture|provider>
+multipass send <fixture>
+multipass roundtrip <fixture>
+multipass agent <fixture>
+multipass run <fixture...>
+multipass watch <fixture>
+multipass webhook <fixture>  # alias of watch
+multipass doctor
+```
+
+## Script adapter contract
+
+`script` providers receive JSON on stdin and must emit JSON on stdout.
+
+`probe` input:
+
+```json
+{
+  "fixture": { "...": "fixture config" },
+  "provider": {
+    "id": "slack-openclaw",
+    "manifestPath": "...",
+    "config": { "...": "provider config" }
+  }
+}
+```
+
+`probe` output:
+
+```json
+{
+  "healthy": true,
+  "details": ["token ok", "channel reachable"]
+}
+```
+
+`send` output:
+
+```json
+{
+  "accepted": true,
+  "messageId": "123",
+  "threadId": "slack:C123:thread"
+}
+```
+
+`waitForInbound` output:
+
+```json
+{
+  "message": {
+    "id": "456",
+    "author": "assistant",
+    "sentAt": "2026-03-13T21:00:00.000Z",
+    "text": "ACK mp-demo-...",
+    "threadId": "slack:C123:thread"
+  }
+}
+```
+
+or:
+
+```json
+{ "timeout": true }
+```
+
+## Add a provider
+
+1. Add a configured provider instance under `providers`.
+2. Set `platform` to one of the supported OpenClaw channel ids from the support matrix.
+3. Use `adapter: slack` for native Slack, otherwise `adapter: script` for bridge-based real E2E.
+4. Add one or more fixtures that point at stable demo accounts/targets.
+5. Run `multipass doctor`, `multipass probe`, then `multipass run ...`.
+
+## Current scope
+
+- Real built-in providers: `loopback`, native `slack`
+- Real external bridge: `script` for the full OpenClaw channel matrix
+- Not implemented yet: native adapters beyond Slack, richer inbound event storage, rich media/cards, recorder compaction/query tooling

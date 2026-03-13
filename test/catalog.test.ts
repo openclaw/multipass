@@ -1,0 +1,69 @@
+import { describe, expect, it } from "vitest";
+import { ManifestSchema } from "../src/config/schema.js";
+import { OPENCLAW_SUPPORT_CATALOG } from "../src/providers/catalog.js";
+
+describe("support catalog", () => {
+  it("covers the full OpenClaw channel matrix without duplicates", () => {
+    const platforms = OPENCLAW_SUPPORT_CATALOG.map((entry) => entry.platform);
+    expect(new Set(platforms).size).toBe(platforms.length);
+    expect(platforms).toContain("bluebubbles");
+    expect(platforms).toContain("mattermost");
+    expect(platforms).toContain("webchat");
+    expect(platforms).toContain("zalouser");
+  });
+
+  it("accepts every catalog platform in the manifest schema", () => {
+    const providers = Object.fromEntries(
+      OPENCLAW_SUPPORT_CATALOG.map((entry) => {
+        if (entry.platform === "loopback") {
+          return [
+            entry.platform,
+            {
+              adapter: "loopback",
+              platform: "loopback",
+            },
+          ];
+        }
+
+        if (entry.platform === "slack") {
+          return [
+            entry.platform,
+            {
+              adapter: "slack",
+              platform: "slack",
+              slack: {},
+            },
+          ];
+        }
+
+        return [
+          entry.platform,
+          {
+            adapter: "script",
+            platform: entry.platform,
+            script: {
+              commands: {},
+            },
+          },
+        ];
+      }),
+    );
+
+    const fixtures = OPENCLAW_SUPPORT_CATALOG.map((entry) => ({
+      id: `${entry.platform}-fixture`,
+      mode: "probe",
+      provider: entry.platform,
+      target: {
+        id: "target",
+      },
+    }));
+
+    expect(() =>
+      ManifestSchema.parse({
+        configVersion: 1,
+        fixtures,
+        providers,
+      }),
+    ).not.toThrow();
+  });
+});

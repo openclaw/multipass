@@ -1,0 +1,29 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["import", "node", "vitest"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error"
+  },
+  "rules": {
+    "curly": "error",
+    "eqeqeq": "error",
+    "import/no-cycle": "error",
+    "import/no-duplicates": "error",
+    "no-console": "error",
+    "no-debugger": "error",
+    "no-duplicate-imports": "error",
+    "no-shadow": "error",
+    "vitest/no-disabled-tests": "error",
+    "vitest/no-focused-tests": "error"
+  },
+  "env": {
+    "builtin": true
+  },
+  "ignorePatterns": ["coverage/**", "dist/**"],
+  "settings": {
+    "vitest": {
+      "typecheck": false
+    }
+  }
+}

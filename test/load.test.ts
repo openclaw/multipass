@@ -1,0 +1,80 @@
+import path from "node:path";
+import { realpath } from "node:fs/promises";
+import { afterEach, describe, expect, it } from "vitest";
+import { loadManifest, resolveConfigPath } from "../src/config/load.js";
+import { createTempDir, disposeTempDir, writeJson, writeText } from "./test-helpers.js";
+
+const directories: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(directories.splice(0).map(disposeTempDir));
+});
+
+describe("config load", () => {
+  it("loads yaml manifests", async () => {
+    const directory = await createTempDir();
+    directories.push(directory);
+    const configPath = path.join(directory, "multipass.yaml");
+    await writeText(
+      configPath,
+      [
+        "configVersion: 1",
+        "providers:",
+        "  local:",
+        "    adapter: loopback",
+        "    platform: loopback",
+        "fixtures:",
+        "  - id: fixture",
+        "    provider: local",
+        "    mode: send",
+        "    target:",
+        "      id: test-target",
+      ].join("\n"),
+    );
+
+    const loaded = await loadManifest(configPath);
+    expect(loaded.manifest.fixtures[0]?.id).toBe("fixture");
+  });
+
+  it("loads json manifests", async () => {
+    const directory = await createTempDir();
+    directories.push(directory);
+    const configPath = path.join(directory, "multipass.json");
+    await writeJson(configPath, {
+      configVersion: 1,
+      fixtures: [{ id: "fixture", mode: "send", provider: "local", target: { id: "test-target" } }],
+      providers: { local: { adapter: "loopback", platform: "loopback" } },
+    });
+
+    const loaded = await loadManifest(configPath);
+    expect(loaded.path).toBe(configPath);
+  });
+
+  it("resolves default config names from cwd", async () => {
+    const directory = await createTempDir();
+    directories.push(directory);
+    const configPath = path.join(directory, "multipass.yml");
+    await writeText(configPath, "configVersion: 1\nproviders: {}\nfixtures: []\n");
+    const originalCwd = process.cwd();
+
+    process.chdir(directory);
+    try {
+      expect(await realpath(await resolveConfigPath())).toBe(await realpath(configPath));
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  it("fails when no config file exists", async () => {
+    const directory = await createTempDir();
+    directories.push(directory);
+    const originalCwd = process.cwd();
+
+    process.chdir(directory);
+    try {
+      await expect(resolveConfigPath()).rejects.toThrow(/No config file found/);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+});

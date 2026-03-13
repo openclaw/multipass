@@ -1,0 +1,76 @@
+configVersion: 1
+userName: multipass
+
+providers:
+  local:
+    adapter: loopback
+    platform: loopback
+    loopback:
+      delayMs: 0
+
+  slack-native:
+    adapter: slack
+    platform: slack
+    env:
+      - SLACK_BOT_TOKEN
+      - SLACK_SIGNING_SECRET
+    slack:
+      recorder:
+        path: ./.multipass/recorders/slack-native.jsonl
+      webhook:
+        host: 127.0.0.1
+        port: 8787
+        path: /slack/events
+        publicUrl: https://example.ngrok.app/slack/events
+
+  slack-openclaw:
+    adapter: script
+    platform: slack
+    env:
+      - OPENCLAW_URL
+      - OPENCLAW_TOKEN
+    script:
+      commands:
+        probe: node ./scripts/openclaw-slack-probe.mjs
+        send: node ./scripts/openclaw-slack-send.mjs
+        waitForInbound: node ./scripts/openclaw-slack-wait.mjs
+
+fixtures:
+  - id: loopback-roundtrip
+    provider: local
+    mode: roundtrip
+    target:
+      id: echo-bot
+      behavior: echo
+
+  - id: loopback-agent
+    provider: local
+    mode: agent
+    target:
+      id: agent-bot
+      behavior: agent
+
+  - id: slack-openclaw-demo
+    provider: slack-openclaw
+    mode: roundtrip
+    env:
+      - OPENCLAW_URL
+      - OPENCLAW_TOKEN
+    target:
+      id: C0123456789
+      channelId: slack:C0123456789
+    inboundMatch:
+      author: assistant
+      strategy: contains
+      nonce: contains
+
+  - id: slack-native-agent
+    provider: slack-native
+    mode: agent
+    target:
+      id: C0123456789
+      channelId: C0123456789
+    inboundMatch:
+      author: assistant
+      strategy: contains
+      nonce: contains

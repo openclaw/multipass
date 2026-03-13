@@ -1,0 +1,117 @@
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  appendRecordedInbound,
+  readRecordedInbound,
+  waitForRecordedInbound,
+  watchRecordedInbound,
+} from "../src/providers/recorder.js";
+import { createTempDir, disposeTempDir } from "./test-helpers.js";
+
+const directories: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(directories.splice(0).map(disposeTempDir));
+});
+
+async function createRecorderPath(): Promise<string> {
+  const directory = await createTempDir();
+  directories.push(directory);
+  return path.join(directory, "inbound.jsonl");
+}
+
+describe("recorder", () => {
+  it("returns an empty list for a missing recorder file", async () => {
+    const filePath = await createRecorderPath();
+    await expect(readRecordedInbound(filePath)).resolves.toEqual([]);
+  });
+
+  it("appends and reads recorded inbound events", async () => {
+    const filePath = await createRecorderPath();
+
+    await appendRecordedInbound(filePath, {
+      author: "assistant",
+      id: "evt-1",
+      provider: "slack-native",
+      sentAt: new Date().toISOString(),
+      text: "hello",
+      threadId: "slack:C123",
+    });
+
+    const events = await readRecordedInbound(filePath);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.recordedAt).toBeTypeOf("string");
+    expect(events[0]?.text).toBe("hello");
+  });
+
+  it("waits for a matching inbound event", async () => {
+    const filePath = await createRecorderPath();
+    const waitPromise = waitForRecordedInbound({
+      filePath,
+      matches: (event) => event.threadId === "slack:C123",
+      timeoutMs: 500,
+    });
+
+    setTimeout(() => {
+      void appendRecordedInbound(filePath, {
+        author: "assistant",
+        id: "evt-2",
+        provider: "slack-native",
+        sentAt: new Date().toISOString(),
+        text: "match me",
+        threadId: "slack:C123",
+      });
+    }, 25);
+
+    await expect(waitPromise).resolves.toMatchObject({
+      id: "evt-2",
+      text: "match me",
+    });
+  });
+
+  it("times out when no matching event arrives", async () => {
+    const filePath = await createRecorderPath();
+
+    await appendRecordedInbound(filePath, {
+      author: "assistant",
+      id: "evt-old",
+      provider: "slack-native",
+      sentAt: new Date(Date.now() - 10_000).toISOString(),
+      text: "too old",
+      threadId: "slack:C123",
+    });
+
+    await expect(
+      waitForRecordedInbound({
+        filePath,
+        matches: (event) => event.threadId === "slack:C123",
+        since: new Date().toISOString(),
+        timeoutMs: 30,
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it("streams new inbound events", async () => {
+    const filePath = await createRecorderPath();
+    const iterator = watchRecordedInbound({
+      filePath,
+      matches: (event) => event.provider === "slack-native",
+      pollMs: 10,
+    })[Symbol.asyncIterator]();
+
+    setTimeout(() => {
+      void appendRecordedInbound(filePath, {
+        author: "user",
+        id: "evt-3",
+        provider: "slack-native",
+        sentAt: new Date().toISOString(),
+        text: "tail me",
+        threadId: "slack:C999",
+      });
+    }, 25);
+
+    const next = await iterator.next();
+    expect(next.done).toBe(false);
+    expect(next.value?.id).toBe("evt-3");
+  });
+});

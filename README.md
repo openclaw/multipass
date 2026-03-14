@@ -6,8 +6,10 @@ The v1 shape is:
 
 - built-in `loopback` provider for local development and contract tests
 - native `slack` provider backed by the Chat SDK Slack adapter
-- `script` bridge for every other OpenClaw-supported messaging channel
+- native community adapters for `matrix` and `imessage`
+- `script` bridge for the remaining OpenClaw-supported messaging channels
 - webhook-backed recorder mode for Slack `watch` / `webhook`
+- recorder-backed watch mode for Matrix and iMessage
 - nonce-based `send`, `roundtrip`, `agent`, `probe`, `run`, `watch`, `doctor`
 - text output by default, stable `--json` for automation
 - core provider model aligned with Vercel Chat SDK concepts
@@ -60,7 +62,7 @@ configVersion: 1
 userName: multipass
 providers:
   local:
-    adapter: loopback | script | slack
+    adapter: loopback | script | slack | matrix | imessage
     platform: see support matrix below
 fixtures:
   - id: string
@@ -88,10 +90,10 @@ Credentials stay in env, never in fixtures.
 
 ## Support Matrix
 
-- `ready`: `loopback`, native `slack`
-- `bridge`: `bluebubbles`, `discord`, `feishu`, `googlechat`, `imessage`, `irc`, `line`, `matrix`, `mattermost`, `msteams`, `nextcloudtalk`, `nostr`, `signal`, `synologychat`, `telegram`, `tlon`, `twitch`, `webchat`, `whatsapp`, `zalo`, `zalouser`
-- Plugin-backed in OpenClaw, still supported through the bridge: `feishu`, `line`, `matrix`, `mattermost`, `msteams`, `nextcloudtalk`, `nostr`, `synologychat`, `tlon`, `twitch`, `zalo`, `zalouser`
-- Legacy in OpenClaw, still supported through the bridge: `imessage`
+- `ready`: `loopback`, native `slack`, native-community `matrix`, native-community `imessage`
+- `bridge`: `bluebubbles`, `discord`, `feishu`, `googlechat`, `irc`, `line`, `mattermost`, `msteams`, `nextcloudtalk`, `nostr`, `signal`, `synologychat`, `telegram`, `tlon`, `twitch`, `webchat`, `whatsapp`, `zalo`, `zalouser`
+- Plugin-backed in OpenClaw, still supported through the bridge: `feishu`, `line`, `mattermost`, `msteams`, `nextcloudtalk`, `nostr`, `synologychat`, `tlon`, `twitch`, `zalo`, `zalouser`
+- Recommended bridge-only path today: `bluebubbles`, `discord`, `googlechat`, `irc`, `signal`, `telegram`, `webchat`, `whatsapp`
 
 Native Slack provider options:
 
@@ -111,6 +113,41 @@ providers:
 ```
 
 `watch` (alias: `webhook`) starts the local Slack webhook listener and tails the recorded inbound JSONL stream. `roundtrip` and `agent` also start the webhook listener on demand, and will reuse an already-running listener on the configured port.
+
+Native Matrix provider options:
+
+```yaml
+providers:
+  matrix-native:
+    adapter: matrix
+    platform: matrix
+    env:
+      - MATRIX_BASE_URL
+      - MATRIX_ACCESS_TOKEN
+    matrix:
+      baseURL: https://matrix.example.com
+      recorder:
+        path: ./.multipass/recorders/matrix-native.jsonl
+```
+
+Native iMessage provider options:
+
+```yaml
+providers:
+  imessage-native:
+    adapter: imessage
+    platform: imessage
+    env:
+      - IMESSAGE_API_KEY
+      - IMESSAGE_SERVER_URL
+    imessage:
+      local: false
+      serverUrl: https://imessage-gateway.example.com
+      recorder:
+        path: ./.multipass/recorders/imessage-native.jsonl
+```
+
+Matrix and iMessage `watch` tail the local recorder stream. There is no webhook listener for Matrix; iMessage uses the adapter gateway listener under the hood.
 
 ## Example fixtures
 
@@ -137,6 +174,30 @@ pnpm dev probe slack-native-agent --config fixtures/examples/multipass.example.y
 SLACK_BOT_TOKEN=xoxb-... \
 SLACK_SIGNING_SECRET=... \
 pnpm dev watch slack-native-agent --config fixtures/examples/multipass.example.yaml
+```
+
+Native Matrix:
+
+```bash
+MATRIX_BASE_URL=https://matrix.example.com \
+MATRIX_ACCESS_TOKEN=... \
+pnpm dev probe matrix-native-agent --config fixtures/examples/multipass.example.yaml
+
+MATRIX_BASE_URL=https://matrix.example.com \
+MATRIX_ACCESS_TOKEN=... \
+pnpm dev watch matrix-native-agent --config fixtures/examples/multipass.example.yaml
+```
+
+Native iMessage:
+
+```bash
+IMESSAGE_SERVER_URL=https://imessage-gateway.example.com \
+IMESSAGE_API_KEY=... \
+pnpm dev probe imessage-native-agent --config fixtures/examples/multipass.example.yaml
+
+IMESSAGE_SERVER_URL=https://imessage-gateway.example.com \
+IMESSAGE_API_KEY=... \
+pnpm dev watch imessage-native-agent --config fixtures/examples/multipass.example.yaml
 ```
 
 Script bridge:

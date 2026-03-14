@@ -99,4 +99,54 @@ describe("registry", () => {
     expect(provider.platform).toBe("slack");
     expect(provider.status).toBe("ready");
   });
+
+  it("resolves native matrix and imessage providers", () => {
+    const nativeManifest: ManifestDefinition = {
+      ...manifest,
+      providers: {
+        imessage: {
+          adapter: "imessage",
+          capabilities: ["probe", "send", "roundtrip", "agent"],
+          env: [],
+          imessage: {
+            gatewayDurationMs: 30_000,
+            local: true,
+            recorder: { path: "/tmp/multipass-imessage-test.jsonl" },
+          },
+          platform: "imessage",
+          status: "active",
+        },
+        matrix: {
+          adapter: "matrix",
+          capabilities: ["probe", "send", "roundtrip", "agent"],
+          env: [],
+          matrix: {
+            auth: { accessToken: "token", type: "accessToken" },
+            baseURL: "https://matrix.example.com",
+            recorder: { path: "/tmp/multipass-matrix-test.jsonl" },
+          },
+          platform: "matrix",
+          status: "active",
+        },
+      },
+      fixtures: [
+        {
+          ...manifest.fixtures[0]!,
+          id: "imessage-fixture",
+          provider: "imessage",
+          target: { id: "chat-guid", metadata: {} },
+        },
+        {
+          ...manifest.fixtures[0]!,
+          id: "matrix-fixture",
+          provider: "matrix",
+          target: { id: "!room:example.com", metadata: {} },
+        },
+      ],
+    };
+
+    const registry = createRegistry(nativeManifest, "/tmp/multipass.yaml");
+    expect(registry.resolve("imessage", "imessage-fixture").platform).toBe("imessage");
+    expect(registry.resolve("matrix", "matrix-fixture").platform).toBe("matrix");
+  });
 });

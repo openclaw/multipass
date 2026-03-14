@@ -35,6 +35,29 @@ providers:
         send: node ./scripts/openclaw-slack-send.mjs
         waitForInbound: node ./scripts/openclaw-slack-wait.mjs
 
+  matrix-native:
+    adapter: matrix
+    platform: matrix
+    env:
+      - MATRIX_BASE_URL
+      - MATRIX_ACCESS_TOKEN
+    matrix:
+      baseURL: https://matrix.example.com
+      recorder:
+        path: ./.multipass/recorders/matrix-native.jsonl
+
+  imessage-native:
+    adapter: imessage
+    platform: imessage
+    env:
+      - IMESSAGE_SERVER_URL
+      - IMESSAGE_API_KEY
+    imessage:
+      local: false
+      serverUrl: https://imessage-gateway.example.com
+      recorder:
+        path: ./.multipass/recorders/imessage-native.jsonl
+
 fixtures:
   - id: loopback-roundtrip
     provider: local
@@ -70,6 +93,27 @@ fixtures:
     target:
       id: C0123456789
       channelId: C0123456789
+    inboundMatch:
+      author: assistant
+      strategy: contains
+      nonce: contains
+
+  - id: matrix-native-agent
+    provider: matrix-native
+    mode: agent
+    target:
+      id: "!room:example.com"
+      channelId: "!room:example.com"
+    inboundMatch:
+      author: assistant
+      strategy: contains
+      nonce: contains
+
+  - id: imessage-native-agent
+    provider: imessage-native
+    mode: agent
+    target:
+      id: chat-guid
     inboundMatch:
       author: assistant
       strategy: contains

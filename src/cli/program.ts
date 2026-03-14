@@ -266,6 +266,33 @@ function diagnose(manifest: Awaited<ReturnType<typeof loadManifest>>["manifest"]
         findings.push(`provider ${providerId} missing env SLACK_SIGNING_SECRET`);
       }
     }
+
+    if (provider.adapter === "matrix") {
+      if (!provider.matrix?.baseURL && !process.env.MATRIX_BASE_URL) {
+        findings.push(`provider ${providerId} missing matrix.baseURL or MATRIX_BASE_URL`);
+      }
+      if (
+        !provider.matrix?.auth &&
+        !process.env.MATRIX_ACCESS_TOKEN &&
+        !(process.env.MATRIX_USERNAME && process.env.MATRIX_PASSWORD)
+      ) {
+        findings.push(
+          `provider ${providerId} missing MATRIX_ACCESS_TOKEN or MATRIX_USERNAME/MATRIX_PASSWORD`,
+        );
+      }
+    }
+
+    if (provider.adapter === "imessage") {
+      const local = provider.imessage?.local ?? process.env.IMESSAGE_LOCAL !== "false";
+      if (!local) {
+        if (!provider.imessage?.serverUrl && !process.env.IMESSAGE_SERVER_URL) {
+          findings.push(`provider ${providerId} missing imessage.serverUrl or IMESSAGE_SERVER_URL`);
+        }
+        if (!provider.imessage?.apiKey && !process.env.IMESSAGE_API_KEY) {
+          findings.push(`provider ${providerId} missing imessage.apiKey or IMESSAGE_API_KEY`);
+        }
+      }
+    }
   }
 
   return findings;

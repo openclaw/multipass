@@ -81,4 +81,58 @@ describe("manifest schema", () => {
       }),
     ).toThrow(/slack adapter must use platform=slack/);
   });
+
+  it("parses matrix and imessage provider config", () => {
+    const manifest = ManifestSchema.parse({
+      configVersion: 1,
+      fixtures: [],
+      providers: {
+        imessage: {
+          adapter: "imessage",
+          imessage: {
+            gatewayDurationMs: 60_000,
+            local: false,
+            serverUrl: "https://example.com",
+          },
+          platform: "imessage",
+        },
+        matrix: {
+          adapter: "matrix",
+          matrix: {
+            auth: {
+              accessToken: "token",
+              type: "accessToken",
+            },
+            baseURL: "https://matrix.example.com",
+          },
+          platform: "matrix",
+        },
+      },
+    });
+
+    expect(manifest.providers.matrix?.matrix?.baseURL).toBe("https://matrix.example.com");
+    expect(manifest.providers.imessage?.imessage?.gatewayDurationMs).toBe(60_000);
+  });
+
+  it("rejects partial matrix auth config", () => {
+    expect(() =>
+      ManifestSchema.parse({
+        configVersion: 1,
+        fixtures: [],
+        providers: {
+          matrix: {
+            adapter: "matrix",
+            matrix: {
+              auth: {
+                type: "password",
+                username: "bot",
+              },
+              baseURL: "https://matrix.example.com",
+            },
+            platform: "matrix",
+          },
+        },
+      }),
+    ).toThrow(/password/u);
+  });
 });

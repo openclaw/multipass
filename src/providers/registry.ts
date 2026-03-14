@@ -1,6 +1,8 @@
 import { MultipassError } from "../core/errors.js";
 import type { ManifestDefinition } from "../config/schema.js";
+import { IMessageProviderAdapter } from "./builtin/imessage.js";
 import { LoopbackProviderAdapter } from "./builtin/loopback.js";
+import { MatrixProviderAdapter } from "./builtin/matrix.js";
 import { SlackProviderAdapter } from "./builtin/slack.js";
 import { ScriptProviderAdapter } from "./builtin/script.js";
 import { OPENCLAW_SUPPORT_CATALOG } from "./catalog.js";
@@ -39,6 +41,14 @@ export function createRegistry(manifest: ManifestDefinition, manifestPath: strin
 
       if (config.adapter === "loopback") {
         return new LoopbackProviderAdapter(providerId, config, manifest.userName);
+      }
+
+      if (config.adapter === "matrix") {
+        return new MatrixProviderAdapter(providerId, config, manifest.userName);
+      }
+
+      if (config.adapter === "imessage") {
+        return new IMessageProviderAdapter(providerId, config, manifest.userName);
       }
 
       if (config.adapter === "slack") {

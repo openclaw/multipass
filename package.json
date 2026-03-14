@@ -30,10 +30,12 @@
     "verify": "pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm format:check"
   },
   "dependencies": {
+    "@beeper/chat-adapter-matrix": "^0.1.0",
     "@chat-adapter/shared": "^4.20.1",
     "@chat-adapter/slack": "^4.20.1",
     "@chat-adapter/state-memory": "^4.20.1",
     "chat": "^4.20.1",
+    "chat-adapter-imessage": "^0.1.1",
     "commander": "^14.0.3",
     "picocolors": "^1.1.1",
     "yaml": "^2.8.2",

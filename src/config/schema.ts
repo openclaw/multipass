@@ -4,7 +4,7 @@ export const FIXTURE_MODES = ["probe", "send", "roundtrip", "agent"] as const;
 export const INBOUND_AUTHORS = ["assistant", "user", "system", "any"] as const;
 export const INBOUND_STRATEGIES = ["contains", "exact", "regex"] as const;
 export const INBOUND_NONCE_MODES = ["contains", "exact", "ignore"] as const;
-export const BUILTIN_ADAPTERS = ["loopback", "script", "slack"] as const;
+export const BUILTIN_ADAPTERS = ["imessage", "loopback", "matrix", "script", "slack"] as const;
 export const PROVIDER_PLATFORMS = [
   "bluebubbles",
   "discord",
@@ -83,12 +83,44 @@ const SlackConfigSchema = z.object({
   }),
 });
 
+const MatrixAccessTokenAuthSchema = z.object({
+  accessToken: z.string().min(1),
+  type: z.literal("accessToken"),
+  userID: z.string().min(1).optional(),
+});
+
+const MatrixPasswordAuthSchema = z.object({
+  password: z.string().min(1),
+  type: z.literal("password"),
+  userID: z.string().min(1).optional(),
+  username: z.string().min(1),
+});
+
+const MatrixConfigSchema = z.object({
+  auth: z.union([MatrixAccessTokenAuthSchema, MatrixPasswordAuthSchema]).optional(),
+  baseURL: z.string().url().optional(),
+  commandPrefix: z.string().min(1).optional(),
+  recorder: z.object({ path: z.string().min(1).optional() }).default({}),
+  recoveryKey: z.string().min(1).optional(),
+  roomAllowlist: z.array(z.string().min(1)).optional(),
+});
+
+const IMessageConfigSchema = z.object({
+  apiKey: z.string().min(1).optional(),
+  gatewayDurationMs: z.number().int().min(1000).default(180_000),
+  local: z.boolean().optional(),
+  recorder: z.object({ path: z.string().min(1).optional() }).default({}),
+  serverUrl: z.string().url().optional(),
+});
+
 export const ProviderConfigSchema = z
   .object({
     adapter: z.enum(BUILTIN_ADAPTERS),
     capabilities: z.array(z.enum(FIXTURE_MODES)).default(["probe", "send", "roundtrip", "agent"]),
     env: z.array(z.string().min(1)).default([]),
+    imessage: IMessageConfigSchema.optional(),
     loopback: LoopbackConfigSchema.optional(),
+    matrix: MatrixConfigSchema.optional(),
     notes: z.string().optional(),
     platform: z.enum(PROVIDER_PLATFORMS).default("loopback"),
     slack: SlackConfigSchema.optional(),
@@ -116,6 +148,22 @@ export const ProviderConfigSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "slack adapter must use platform=slack",
+        path: ["platform"],
+      });
+    }
+
+    if (value.adapter === "matrix" && value.platform !== "matrix") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "matrix adapter must use platform=matrix",
+        path: ["platform"],
+      });
+    }
+
+    if (value.adapter === "imessage" && value.platform !== "imessage") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "imessage adapter must use platform=imessage",
         path: ["platform"],
       });
     }

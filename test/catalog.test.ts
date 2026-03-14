@@ -10,6 +10,9 @@ describe("support catalog", () => {
     expect(platforms).toContain("mattermost");
     expect(platforms).toContain("webchat");
     expect(platforms).toContain("zalouser");
+    expect(OPENCLAW_SUPPORT_CATALOG.find((entry) => entry.platform === "discord")?.status).toBe(
+      "ready",
+    );
   });
 
   it("accepts every catalog platform in the manifest schema", () => {

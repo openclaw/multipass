@@ -30,7 +30,12 @@ export const OPENCLAW_SUPPORT_CATALOG = [
     "bluebubbles",
     "OpenClaw channel via script bridge. Recommended iMessage path.",
   ),
-  createBridgeEntry("discord", "OpenClaw channel via script bridge."),
+  {
+    notes: "Native Chat SDK adapter with interactions webhook and gateway listener.",
+    platform: "discord",
+    status: "ready",
+    supports: COMMON_BRIDGE_SUPPORT,
+  },
   createBridgeEntry("feishu", "OpenClaw plugin channel via script bridge."),
   createBridgeEntry("googlechat", "OpenClaw channel via script bridge."),
   {

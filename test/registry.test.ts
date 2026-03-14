@@ -100,10 +100,29 @@ describe("registry", () => {
     expect(provider.status).toBe("ready");
   });
 
-  it("resolves native matrix and imessage providers", () => {
+  it("resolves native discord, matrix, and imessage providers", () => {
     const nativeManifest: ManifestDefinition = {
       ...manifest,
       providers: {
+        discord: {
+          adapter: "discord",
+          capabilities: ["probe", "send", "roundtrip", "agent"],
+          discord: {
+            applicationId: "123456789012345678",
+            botToken: "discord-token",
+            gatewayDurationMs: 30_000,
+            publicKey: "a".repeat(64),
+            recorder: { path: "/tmp/multipass-discord-test.jsonl" },
+            webhook: {
+              host: "127.0.0.1",
+              path: "/discord/interactions",
+              port: 8788,
+            },
+          },
+          env: [],
+          platform: "discord",
+          status: "active",
+        },
         imessage: {
           adapter: "imessage",
           capabilities: ["probe", "send", "roundtrip", "agent"],
@@ -132,6 +151,15 @@ describe("registry", () => {
       fixtures: [
         {
           ...manifest.fixtures[0]!,
+          id: "discord-fixture",
+          provider: "discord",
+          target: {
+            id: "123456789012345678",
+            metadata: { guildId: "987654321098765432" },
+          },
+        },
+        {
+          ...manifest.fixtures[0]!,
           id: "imessage-fixture",
           provider: "imessage",
           target: { id: "chat-guid", metadata: {} },
@@ -146,6 +174,7 @@ describe("registry", () => {
     };
 
     const registry = createRegistry(nativeManifest, "/tmp/multipass.yaml");
+    expect(registry.resolve("discord", "discord-fixture").platform).toBe("discord");
     expect(registry.resolve("imessage", "imessage-fixture").platform).toBe("imessage");
     expect(registry.resolve("matrix", "matrix-fixture").platform).toBe("matrix");
   });

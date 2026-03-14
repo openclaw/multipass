@@ -81,39 +81,51 @@ type IMessageRuntime = {
   createChat(adapter: IMessageAdapterApi, userName: string): IMessageChat;
 };
 
+type IMessageEnvironment = Partial<
+  Pick<NodeJS.ProcessEnv, "IMESSAGE_API_KEY" | "IMESSAGE_LOCAL" | "IMESSAGE_SERVER_URL">
+>;
+
+export function resolveIMessageAdapterConfig(
+  config: ProviderConfig,
+  env: IMessageEnvironment = process.env,
+) {
+  const iMessageConfig = config.imessage;
+  const local =
+    iMessageConfig?.local ?? (env.IMESSAGE_LOCAL ? env.IMESSAGE_LOCAL !== "false" : undefined);
+  const apiKey = iMessageConfig?.apiKey ?? env.IMESSAGE_API_KEY;
+  const serverUrl = iMessageConfig?.serverUrl ?? env.IMESSAGE_SERVER_URL;
+
+  if (local === false) {
+    if (!serverUrl) {
+      throw new MultipassError(
+        "iMessage remote mode requires imessage.serverUrl or IMESSAGE_SERVER_URL.",
+        {
+          kind: "config",
+        },
+      );
+    }
+    if (!apiKey) {
+      throw new MultipassError(
+        "iMessage remote mode requires imessage.apiKey or IMESSAGE_API_KEY.",
+        {
+          kind: "config",
+        },
+      );
+    }
+  }
+
+  return {
+    ...(apiKey ? { apiKey } : {}),
+    ...(local !== undefined ? { local } : {}),
+    ...(serverUrl ? { serverUrl } : {}),
+  };
+}
+
 const DEFAULT_RUNTIME: IMessageRuntime = {
   createAdapter(config) {
-    const iMessageConfig = config.imessage;
-    const local =
-      iMessageConfig?.local ??
-      (process.env.IMESSAGE_LOCAL ? process.env.IMESSAGE_LOCAL !== "false" : undefined);
-    const apiKey = iMessageConfig?.apiKey ?? process.env.IMESSAGE_API_KEY;
-    const serverUrl = iMessageConfig?.serverUrl ?? process.env.IMESSAGE_SERVER_URL;
-
-    if (local === false) {
-      if (!serverUrl) {
-        throw new MultipassError(
-          "iMessage remote mode requires imessage.serverUrl or IMESSAGE_SERVER_URL.",
-          {
-            kind: "config",
-          },
-        );
-      }
-      if (!apiKey) {
-        throw new MultipassError(
-          "iMessage remote mode requires imessage.apiKey or IMESSAGE_API_KEY.",
-          {
-            kind: "config",
-          },
-        );
-      }
-    }
-
-    return createiMessageAdapter({
-      ...(apiKey ? { apiKey } : {}),
-      ...(local !== undefined ? { local } : {}),
-      ...(serverUrl ? { serverUrl } : {}),
-    }) as unknown as IMessageAdapterApi;
+    return createiMessageAdapter(
+      resolveIMessageAdapterConfig(config),
+    ) as unknown as IMessageAdapterApi;
   },
   createChat(adapter, userName) {
     return new Chat<{ imessage: Adapter }>({

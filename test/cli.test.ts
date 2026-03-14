@@ -161,4 +161,60 @@ describe("cli", () => {
     expect(captured.stdout.join("")).toContain("missing env SLACK_BOT_TOKEN");
     expect(captured.stdout.join("")).toContain("missing env SLACK_SIGNING_SECRET");
   });
+
+  it("doctor reports missing discord env", async () => {
+    const directory = await createTempDir();
+    directories.push(directory);
+    const configPath = path.join(directory, "multipass.yaml");
+    await writeText(
+      configPath,
+      [
+        "configVersion: 1",
+        "providers:",
+        "  discord-native:",
+        "    adapter: discord",
+        "    platform: discord",
+        "    discord: {}",
+        "fixtures:",
+        "  - id: discord-agent",
+        "    provider: discord-native",
+        "    mode: agent",
+        "    target:",
+        '      id: "123456789012345678"',
+        "      metadata:",
+        '        guildId: "987654321098765432"',
+      ].join("\n"),
+    );
+
+    const originalBotToken = process.env.DISCORD_BOT_TOKEN;
+    const originalPublicKey = process.env.DISCORD_PUBLIC_KEY;
+    const originalApplicationId = process.env.DISCORD_APPLICATION_ID;
+    delete process.env.DISCORD_BOT_TOKEN;
+    delete process.env.DISCORD_PUBLIC_KEY;
+    delete process.env.DISCORD_APPLICATION_ID;
+
+    const captured = captureWrites();
+    let exitCode: number;
+    try {
+      exitCode = await runCli(["node", "multipass", "--config", configPath, "doctor"]);
+    } finally {
+      captured.restore();
+      if (originalBotToken !== undefined) {
+        process.env.DISCORD_BOT_TOKEN = originalBotToken;
+      }
+      if (originalPublicKey !== undefined) {
+        process.env.DISCORD_PUBLIC_KEY = originalPublicKey;
+      }
+      if (originalApplicationId !== undefined) {
+        process.env.DISCORD_APPLICATION_ID = originalApplicationId;
+      }
+    }
+
+    expect(exitCode!).toBe(10);
+    expect(captured.stdout.join("")).toContain("missing discord.botToken or DISCORD_BOT_TOKEN");
+    expect(captured.stdout.join("")).toContain(
+      "missing discord.applicationId or DISCORD_APPLICATION_ID",
+    );
+    expect(captured.stdout.join("")).toContain("missing discord.publicKey or DISCORD_PUBLIC_KEY");
+  });
 });

@@ -5,10 +5,12 @@ Standalone CLI for deterministic messaging-provider tests. `multipass` is config
 The v1 shape is:
 
 - built-in `loopback` provider for local development and contract tests
+- native `discord` provider backed by the Chat SDK Discord adapter
 - native `slack` provider backed by the Chat SDK Slack adapter
 - native community adapters for `matrix` and `imessage`
 - `script` bridge for the remaining OpenClaw-supported messaging channels
 - webhook-backed recorder mode for Slack `watch` / `webhook`
+- interactions-webhook + gateway-backed recorder mode for Discord
 - recorder-backed watch mode for Matrix and iMessage
 - nonce-based `send`, `roundtrip`, `agent`, `probe`, `run`, `watch`, `doctor`
 - text output by default, stable `--json` for automation
@@ -62,7 +64,7 @@ configVersion: 1
 userName: multipass
 providers:
   local:
-    adapter: loopback | script | slack | matrix | imessage
+    adapter: loopback | script | slack | discord | matrix | imessage
     platform: see support matrix below
 fixtures:
   - id: string
@@ -90,10 +92,39 @@ Credentials stay in env, never in fixtures.
 
 ## Support Matrix
 
-- `ready`: `loopback`, native `slack`, native-community `matrix`, native-community `imessage`
-- `bridge`: `bluebubbles`, `discord`, `feishu`, `googlechat`, `irc`, `line`, `mattermost`, `msteams`, `nextcloudtalk`, `nostr`, `signal`, `synologychat`, `telegram`, `tlon`, `twitch`, `webchat`, `whatsapp`, `zalo`, `zalouser`
+- `ready`: `loopback`, native `slack`, native `discord`, native-community `matrix`, native-community `imessage`
+- `bridge`: `bluebubbles`, `feishu`, `googlechat`, `irc`, `line`, `mattermost`, `msteams`, `nextcloudtalk`, `nostr`, `signal`, `synologychat`, `telegram`, `tlon`, `twitch`, `webchat`, `whatsapp`, `zalo`, `zalouser`
 - Plugin-backed in OpenClaw, still supported through the bridge: `feishu`, `line`, `mattermost`, `msteams`, `nextcloudtalk`, `nostr`, `synologychat`, `tlon`, `twitch`, `zalo`, `zalouser`
-- Recommended bridge-only path today: `bluebubbles`, `discord`, `googlechat`, `irc`, `signal`, `telegram`, `webchat`, `whatsapp`
+- Recommended bridge-only path today: `bluebubbles`, `googlechat`, `irc`, `signal`, `telegram`, `webchat`, `whatsapp`
+
+Native Discord provider options:
+
+```yaml
+providers:
+  discord-native:
+    adapter: discord
+    platform: discord
+    env:
+      - DISCORD_BOT_TOKEN
+      - DISCORD_PUBLIC_KEY
+      - DISCORD_APPLICATION_ID
+    discord:
+      recorder:
+        path: ./.multipass/recorders/discord-native.jsonl
+      webhook:
+        host: 127.0.0.1
+        port: 8788
+        path: /discord/interactions
+        publicUrl: https://example.ngrok.app/discord/interactions # optional
+```
+
+Discord fixture targeting rules:
+
+- Guild channels: set `target.metadata.guildId` and either a raw channel id or a fully encoded `discord:guild:channel[:thread]` id.
+- DMs: omit `target.metadata.guildId`; `target.id` is treated as the user id.
+- Quote Discord snowflakes in YAML so they stay strings.
+
+Discord `watch` and `roundtrip` start the local interactions server plus a Discord Gateway listener. `publicUrl` is optional for local gateway-driven receive tests, but needed if you want Discord itself to hit your interactions endpoint from outside your machine.
 
 Native Slack provider options:
 
@@ -174,6 +205,20 @@ pnpm dev probe slack-native-agent --config fixtures/examples/multipass.example.y
 SLACK_BOT_TOKEN=xoxb-... \
 SLACK_SIGNING_SECRET=... \
 pnpm dev watch slack-native-agent --config fixtures/examples/multipass.example.yaml
+```
+
+Native Discord:
+
+```bash
+DISCORD_BOT_TOKEN=... \
+DISCORD_PUBLIC_KEY=... \
+DISCORD_APPLICATION_ID=... \
+pnpm dev probe discord-native-agent --config fixtures/examples/multipass.example.yaml
+
+DISCORD_BOT_TOKEN=... \
+DISCORD_PUBLIC_KEY=... \
+DISCORD_APPLICATION_ID=... \
+pnpm dev watch discord-native-agent --config fixtures/examples/multipass.example.yaml
 ```
 
 Native Matrix:

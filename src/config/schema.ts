@@ -4,7 +4,14 @@ export const FIXTURE_MODES = ["probe", "send", "roundtrip", "agent"] as const;
 export const INBOUND_AUTHORS = ["assistant", "user", "system", "any"] as const;
 export const INBOUND_STRATEGIES = ["contains", "exact", "regex"] as const;
 export const INBOUND_NONCE_MODES = ["contains", "exact", "ignore"] as const;
-export const BUILTIN_ADAPTERS = ["imessage", "loopback", "matrix", "script", "slack"] as const;
+export const BUILTIN_ADAPTERS = [
+  "discord",
+  "imessage",
+  "loopback",
+  "matrix",
+  "script",
+  "slack",
+] as const;
 export const PROVIDER_PLATFORMS = [
   "bluebubbles",
   "discord",
@@ -83,6 +90,31 @@ const SlackConfigSchema = z.object({
   }),
 });
 
+const DiscordRecorderSchema = z.object({
+  path: z.string().min(1).optional(),
+});
+
+const DiscordWebhookSchema = z.object({
+  host: z.string().min(1).default("127.0.0.1"),
+  path: z.string().min(1).default("/discord/interactions"),
+  port: z.number().int().min(0).max(65_535).default(8788),
+  publicUrl: z.string().url().optional(),
+});
+
+const DiscordConfigSchema = z.object({
+  applicationId: z.string().min(1).optional(),
+  botToken: z.string().min(1).optional(),
+  gatewayDurationMs: z.number().int().min(1000).default(180_000),
+  mentionRoleIds: z.array(z.string().min(1)).optional(),
+  publicKey: z.string().min(1).optional(),
+  recorder: DiscordRecorderSchema.default({}),
+  webhook: DiscordWebhookSchema.default({
+    host: "127.0.0.1",
+    path: "/discord/interactions",
+    port: 8788,
+  }),
+});
+
 const MatrixAccessTokenAuthSchema = z.object({
   accessToken: z.string().min(1),
   type: z.literal("accessToken"),
@@ -117,6 +149,7 @@ export const ProviderConfigSchema = z
   .object({
     adapter: z.enum(BUILTIN_ADAPTERS),
     capabilities: z.array(z.enum(FIXTURE_MODES)).default(["probe", "send", "roundtrip", "agent"]),
+    discord: DiscordConfigSchema.optional(),
     env: z.array(z.string().min(1)).default([]),
     imessage: IMessageConfigSchema.optional(),
     loopback: LoopbackConfigSchema.optional(),
@@ -148,6 +181,14 @@ export const ProviderConfigSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "slack adapter must use platform=slack",
+        path: ["platform"],
+      });
+    }
+
+    if (value.adapter === "discord" && value.platform !== "discord") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "discord adapter must use platform=discord",
         path: ["platform"],
       });
     }

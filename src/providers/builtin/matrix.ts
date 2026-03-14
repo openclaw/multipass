@@ -78,31 +78,51 @@ type MatrixRuntime = {
   createChat(adapter: MatrixAdapterApi, userName: string): MatrixChat;
 };
 
+type MatrixEnvironment = Partial<
+  Pick<
+    NodeJS.ProcessEnv,
+    | "MATRIX_ACCESS_TOKEN"
+    | "MATRIX_BASE_URL"
+    | "MATRIX_PASSWORD"
+    | "MATRIX_RECOVERY_KEY"
+    | "MATRIX_USERNAME"
+    | "MATRIX_USER_ID"
+  >
+>;
+
+export function resolveMatrixAdapterConfig(
+  config: ProviderConfig,
+  userName: string,
+  env: MatrixEnvironment = process.env,
+) {
+  const matrixConfig = config.matrix;
+  const baseURL = matrixConfig?.baseURL ?? env.MATRIX_BASE_URL;
+  if (!baseURL) {
+    throw new MultipassError(
+      "Matrix base URL is required. Set matrix.baseURL or MATRIX_BASE_URL.",
+      {
+        kind: "config",
+      },
+    );
+  }
+
+  return {
+    auth: resolveMatrixAuth(matrixConfig?.auth, env),
+    baseURL,
+    ...(matrixConfig?.commandPrefix ? { commandPrefix: matrixConfig.commandPrefix } : {}),
+    ...((matrixConfig?.recoveryKey ?? env.MATRIX_RECOVERY_KEY)
+      ? { recoveryKey: matrixConfig?.recoveryKey ?? env.MATRIX_RECOVERY_KEY! }
+      : {}),
+    ...(matrixConfig?.roomAllowlist ? { roomAllowlist: matrixConfig.roomAllowlist } : {}),
+    userName,
+  };
+}
+
 const DEFAULT_RUNTIME: MatrixRuntime = {
   createAdapter(config, userName) {
-    const matrixConfig = config.matrix;
-    const baseURL = matrixConfig?.baseURL ?? process.env.MATRIX_BASE_URL;
-    if (!baseURL) {
-      throw new MultipassError(
-        "Matrix base URL is required. Set matrix.baseURL or MATRIX_BASE_URL.",
-        {
-          kind: "config",
-        },
-      );
-    }
-
-    const auth = resolveMatrixAuth(matrixConfig?.auth);
-
-    return createMatrixAdapter({
-      auth,
-      baseURL,
-      ...(matrixConfig?.commandPrefix ? { commandPrefix: matrixConfig.commandPrefix } : {}),
-      ...((matrixConfig?.recoveryKey ?? process.env.MATRIX_RECOVERY_KEY)
-        ? { recoveryKey: matrixConfig?.recoveryKey ?? process.env.MATRIX_RECOVERY_KEY! }
-        : {}),
-      ...(matrixConfig?.roomAllowlist ? { roomAllowlist: matrixConfig.roomAllowlist } : {}),
-      userName,
-    }) as unknown as MatrixAdapterApi;
+    return createMatrixAdapter(
+      resolveMatrixAdapterConfig(config, userName),
+    ) as unknown as MatrixAdapterApi;
   },
   createChat(adapter, userName) {
     return new Chat<{ matrix: Adapter }>({
@@ -148,21 +168,21 @@ function classifyMatrixFailure(error: unknown): MultipassError {
   return new MultipassError(message, { cause: error, kind: "connectivity" });
 }
 
-function resolveMatrixAuthFromEnv() {
-  if (process.env.MATRIX_ACCESS_TOKEN) {
+function resolveMatrixAuthFromEnv(env: MatrixEnvironment) {
+  if (env.MATRIX_ACCESS_TOKEN) {
     return {
-      accessToken: process.env.MATRIX_ACCESS_TOKEN,
+      accessToken: env.MATRIX_ACCESS_TOKEN,
       type: "accessToken" as const,
-      ...(process.env.MATRIX_USER_ID ? { userID: process.env.MATRIX_USER_ID } : {}),
+      ...(env.MATRIX_USER_ID ? { userID: env.MATRIX_USER_ID } : {}),
     };
   }
 
-  if (process.env.MATRIX_USERNAME && process.env.MATRIX_PASSWORD) {
+  if (env.MATRIX_USERNAME && env.MATRIX_PASSWORD) {
     return {
-      password: process.env.MATRIX_PASSWORD,
+      password: env.MATRIX_PASSWORD,
       type: "password" as const,
-      username: process.env.MATRIX_USERNAME,
-      ...(process.env.MATRIX_USER_ID ? { userID: process.env.MATRIX_USER_ID } : {}),
+      username: env.MATRIX_USERNAME,
+      ...(env.MATRIX_USER_ID ? { userID: env.MATRIX_USER_ID } : {}),
     };
   }
 
@@ -172,7 +192,7 @@ function resolveMatrixAuthFromEnv() {
   );
 }
 
-function resolveMatrixAuth(auth?: MatrixProviderAuth) {
+function resolveMatrixAuth(auth: MatrixProviderAuth | undefined, env: MatrixEnvironment) {
   if (auth?.type === "accessToken") {
     if (!auth.accessToken) {
       throw new MultipassError("Matrix accessToken auth requires auth.accessToken.", {
@@ -202,7 +222,7 @@ function resolveMatrixAuth(auth?: MatrixProviderAuth) {
     };
   }
 
-  return resolveMatrixAuthFromEnv();
+  return resolveMatrixAuthFromEnv(env);
 }
 
 export class MatrixProviderAdapter implements ProviderAdapter {

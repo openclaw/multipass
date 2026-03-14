@@ -35,6 +35,22 @@ providers:
         send: node ./scripts/openclaw-slack-send.mjs
         waitForInbound: node ./scripts/openclaw-slack-wait.mjs
 
+  discord-native:
+    adapter: discord
+    platform: discord
+    env:
+      - DISCORD_BOT_TOKEN
+      - DISCORD_PUBLIC_KEY
+      - DISCORD_APPLICATION_ID
+    discord:
+      recorder:
+        path: ./.multipass/recorders/discord-native.jsonl
+      webhook:
+        host: 127.0.0.1
+        port: 8788
+        path: /discord/interactions
+        publicUrl: https://example.ngrok.app/discord/interactions
+
   matrix-native:
     adapter: matrix
     platform: matrix
@@ -104,6 +120,18 @@ fixtures:
     target:
       id: "!room:example.com"
       channelId: "!room:example.com"
+    inboundMatch:
+      author: assistant
+      strategy: contains
+      nonce: contains
+
+  - id: discord-native-agent
+    provider: discord-native
+    mode: agent
+    target:
+      id: "123456789012345678"
+      metadata:
+        guildId: "987654321098765432"
     inboundMatch:
       author: assistant
       strategy: contains

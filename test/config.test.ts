@@ -82,11 +82,24 @@ describe("manifest schema", () => {
     ).toThrow(/slack adapter must use platform=slack/);
   });
 
-  it("parses matrix and imessage provider config", () => {
+  it("parses discord, matrix, and imessage provider config", () => {
     const manifest = ManifestSchema.parse({
       configVersion: 1,
       fixtures: [],
       providers: {
+        discord: {
+          adapter: "discord",
+          discord: {
+            applicationId: "123456789012345678",
+            gatewayDurationMs: 60_000,
+            publicKey: "a".repeat(64),
+            webhook: {
+              path: "/discord/interactions",
+              port: 8788,
+            },
+          },
+          platform: "discord",
+        },
         imessage: {
           adapter: "imessage",
           imessage: {
@@ -110,6 +123,7 @@ describe("manifest schema", () => {
       },
     });
 
+    expect(manifest.providers.discord?.discord?.gatewayDurationMs).toBe(60_000);
     expect(manifest.providers.matrix?.matrix?.baseURL).toBe("https://matrix.example.com");
     expect(manifest.providers.imessage?.imessage?.gatewayDurationMs).toBe(60_000);
   });
@@ -134,5 +148,20 @@ describe("manifest schema", () => {
         },
       }),
     ).toThrow(/password/u);
+  });
+
+  it("rejects discord adapter on a non-discord platform", () => {
+    expect(() =>
+      ManifestSchema.parse({
+        configVersion: 1,
+        fixtures: [],
+        providers: {
+          discord: {
+            adapter: "discord",
+            platform: "slack",
+          },
+        },
+      }),
+    ).toThrow(/discord adapter must use platform=discord/u);
   });
 });

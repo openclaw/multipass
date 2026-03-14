@@ -267,6 +267,20 @@ function diagnose(manifest: Awaited<ReturnType<typeof loadManifest>>["manifest"]
       }
     }
 
+    if (provider.adapter === "discord") {
+      if (!provider.discord?.botToken && !process.env.DISCORD_BOT_TOKEN) {
+        findings.push(`provider ${providerId} missing discord.botToken or DISCORD_BOT_TOKEN`);
+      }
+      if (!provider.discord?.applicationId && !process.env.DISCORD_APPLICATION_ID) {
+        findings.push(
+          `provider ${providerId} missing discord.applicationId or DISCORD_APPLICATION_ID`,
+        );
+      }
+      if (!provider.discord?.publicKey && !process.env.DISCORD_PUBLIC_KEY) {
+        findings.push(`provider ${providerId} missing discord.publicKey or DISCORD_PUBLIC_KEY`);
+      }
+    }
+
     if (provider.adapter === "matrix") {
       if (!provider.matrix?.baseURL && !process.env.MATRIX_BASE_URL) {
         findings.push(`provider ${providerId} missing matrix.baseURL or MATRIX_BASE_URL`);

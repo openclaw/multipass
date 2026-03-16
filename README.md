@@ -97,6 +97,13 @@ Credentials stay in env, never in fixtures.
 - Plugin-backed in OpenClaw, still supported through the bridge: `feishu`, `line`, `mattermost`, `msteams`, `nextcloudtalk`, `nostr`, `synologychat`, `tlon`, `twitch`, `zalo`, `zalouser`
 - Recommended bridge-only path today: `bluebubbles`, `googlechat`, `irc`, `signal`, `telegram`, `webchat`, `whatsapp`
 
+Telegram bridge notes:
+
+- Use one bot plus one real Telegram user identity for two-way tests.
+- Do not model Telegram roundtrip as bot-to-bot; Telegram bots do not receive messages from other bots, and Bot API delivery is update-queue/webhook based rather than arbitrary history fetch.
+- Best operator path: DM-first, then group/topic once DM roundtrip is stable.
+- For unattended automation, drive the user side with MTProto (for example Telethon), not a second bot.
+
 Native Discord provider options:
 
 ```yaml
@@ -218,6 +225,16 @@ pnpm dev probe discord-native-agent --config fixtures/examples/multipass.example
 DISCORD_BOT_TOKEN=... \
 pnpm dev watch discord-native-agent --config fixtures/examples/multipass.example.yaml
 ```
+
+Telegram via OpenClaw bridge:
+
+```bash
+OPENCLAW_URL=http://127.0.0.1:8080 \
+OPENCLAW_TOKEN=... \
+pnpm dev roundtrip telegram-openclaw-roundtrip --config fixtures/examples/openclaw-supported.yaml
+```
+
+For true Telegram two-way verification, point `target.id` at the dedicated human test account, not another bot.
 
 Native Matrix:
 

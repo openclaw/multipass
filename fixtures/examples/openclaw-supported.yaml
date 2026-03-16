@@ -104,6 +104,16 @@ fixtures:
       strategy: contains
       nonce: contains
 
+  - id: telegram-openclaw-roundtrip
+    provider: telegram-openclaw
+    mode: roundtrip
+    target:
+      id: REPLACE_ME # Telegram user id; use a dedicated human/MTProto test account, not another bot
+    inboundMatch:
+      author: assistant
+      strategy: contains
+      nonce: contains
+
   - id: whatsapp-openclaw-roundtrip
     provider: whatsapp-openclaw
     mode: roundtrip

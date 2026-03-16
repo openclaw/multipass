@@ -40,8 +40,6 @@ providers:
     platform: discord
     env:
       - DISCORD_BOT_TOKEN
-      - DISCORD_PUBLIC_KEY
-      - DISCORD_APPLICATION_ID
     discord:
       recorder:
         path: ./.multipass/recorders/discord-native.jsonl

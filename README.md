@@ -106,9 +106,9 @@ providers:
     platform: discord
     env:
       - DISCORD_BOT_TOKEN
-      - DISCORD_PUBLIC_KEY
-      - DISCORD_APPLICATION_ID
     discord:
+      applicationId: "123456789012345678" # optional; auto-discovered from bot token when omitted
+      publicKey: "0123456789abcdef..." # optional; auto-discovered from bot token when omitted
       recorder:
         path: ./.multipass/recorders/discord-native.jsonl
       webhook:
@@ -123,6 +123,8 @@ Discord fixture targeting rules:
 - Guild channels: set `target.metadata.guildId` and either a raw channel id or a fully encoded `discord:guild:channel[:thread]` id.
 - DMs: omit `target.metadata.guildId`; `target.id` is treated as the user id.
 - Quote Discord snowflakes in YAML so they stay strings.
+
+Discord metadata defaults to token-only setup. When `applicationId` or `publicKey` are omitted, `multipass` fetches them from Discord using the bot token on first connect.
 
 Discord `watch` and `roundtrip` start the local interactions server plus a Discord Gateway listener. `publicUrl` is optional for local gateway-driven receive tests, but needed if you want Discord itself to hit your interactions endpoint from outside your machine.
 
@@ -211,13 +213,9 @@ Native Discord:
 
 ```bash
 DISCORD_BOT_TOKEN=... \
-DISCORD_PUBLIC_KEY=... \
-DISCORD_APPLICATION_ID=... \
 pnpm dev probe discord-native-agent --config fixtures/examples/multipass.example.yaml
 
 DISCORD_BOT_TOKEN=... \
-DISCORD_PUBLIC_KEY=... \
-DISCORD_APPLICATION_ID=... \
 pnpm dev watch discord-native-agent --config fixtures/examples/multipass.example.yaml
 ```
 

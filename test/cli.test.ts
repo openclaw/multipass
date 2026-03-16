@@ -162,7 +162,7 @@ describe("cli", () => {
     expect(captured.stdout.join("")).toContain("missing env SLACK_SIGNING_SECRET");
   });
 
-  it("doctor reports missing discord env", async () => {
+  it("doctor reports missing discord bot token", async () => {
     const directory = await createTempDir();
     directories.push(directory);
     const configPath = path.join(directory, "multipass.yaml");
@@ -212,9 +212,5 @@ describe("cli", () => {
 
     expect(exitCode!).toBe(10);
     expect(captured.stdout.join("")).toContain("missing discord.botToken or DISCORD_BOT_TOKEN");
-    expect(captured.stdout.join("")).toContain(
-      "missing discord.applicationId or DISCORD_APPLICATION_ID",
-    );
-    expect(captured.stdout.join("")).toContain("missing discord.publicKey or DISCORD_PUBLIC_KEY");
   });
 });

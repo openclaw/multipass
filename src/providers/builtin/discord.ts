@@ -82,32 +82,84 @@ type DiscordChat = {
 };
 
 type DiscordRuntime = {
-  createAdapter(config: ProviderConfig, userName: string): DiscordAdapterApi;
-  createChat(adapter: DiscordAdapterApi, userName: string): DiscordChat;
+  createAdapter(
+    config: ProviderConfig,
+    userName: string,
+  ): Promise<DiscordAdapterApi> | DiscordAdapterApi;
+  createChat(adapter: DiscordAdapterApi, userName: string): Promise<DiscordChat> | DiscordChat;
 };
 
 type DiscordEnvironment = Partial<
   Pick<NodeJS.ProcessEnv, "DISCORD_APPLICATION_ID" | "DISCORD_BOT_TOKEN" | "DISCORD_PUBLIC_KEY">
 >;
 
-export function resolveDiscordAdapterConfig(
+type DiscordApplicationMetadata = {
+  applicationId: string;
+  publicKey: string;
+};
+
+async function fetchDiscordApplicationMetadata(
+  botToken: string,
+): Promise<DiscordApplicationMetadata> {
+  let response: Response;
+
+  try {
+    response = await fetch("https://discord.com/api/v10/oauth2/applications/@me", {
+      headers: {
+        Authorization: `Bot ${botToken}`,
+      },
+    });
+  } catch (error) {
+    throw new MultipassError(
+      `Discord application metadata lookup failed: ${ensureErrorMessage(error)}`,
+      {
+        cause: error,
+        kind: "connectivity",
+      },
+    );
+  }
+
+  if (!response.ok) {
+    throw new MultipassError(
+      `Discord application metadata lookup failed: HTTP ${response.status}`,
+      {
+        kind: response.status === 401 || response.status === 403 ? "auth" : "connectivity",
+      },
+    );
+  }
+
+  const payload = (await response.json()) as {
+    id?: unknown;
+    verify_key?: unknown;
+  };
+
+  if (typeof payload.id !== "string" || payload.id.length === 0) {
+    throw new MultipassError("Discord application metadata lookup returned no application id.", {
+      kind: "connectivity",
+    });
+  }
+
+  if (typeof payload.verify_key !== "string" || payload.verify_key.length === 0) {
+    throw new MultipassError("Discord application metadata lookup returned no public key.", {
+      kind: "connectivity",
+    });
+  }
+
+  return {
+    applicationId: payload.id,
+    publicKey: payload.verify_key,
+  };
+}
+
+export async function resolveDiscordAdapterConfig(
   config: ProviderConfig,
   userName: string,
   env: DiscordEnvironment = process.env,
 ) {
   const discordConfig = config.discord;
-  const applicationId = discordConfig?.applicationId ?? env.DISCORD_APPLICATION_ID;
   const botToken = discordConfig?.botToken ?? env.DISCORD_BOT_TOKEN;
-  const publicKey = discordConfig?.publicKey ?? env.DISCORD_PUBLIC_KEY;
-
-  if (!applicationId) {
-    throw new MultipassError(
-      "Discord application ID is required. Set discord.applicationId or DISCORD_APPLICATION_ID.",
-      {
-        kind: "config",
-      },
-    );
-  }
+  let applicationId = discordConfig?.applicationId ?? env.DISCORD_APPLICATION_ID;
+  let publicKey = discordConfig?.publicKey ?? env.DISCORD_PUBLIC_KEY;
 
   if (!botToken) {
     throw new MultipassError(
@@ -118,13 +170,10 @@ export function resolveDiscordAdapterConfig(
     );
   }
 
-  if (!publicKey) {
-    throw new MultipassError(
-      "Discord public key is required. Set discord.publicKey or DISCORD_PUBLIC_KEY.",
-      {
-        kind: "config",
-      },
-    );
+  if (!applicationId || !publicKey) {
+    const metadata = await fetchDiscordApplicationMetadata(botToken);
+    applicationId ??= metadata.applicationId;
+    publicKey ??= metadata.publicKey;
   }
 
   return {
@@ -137,9 +186,9 @@ export function resolveDiscordAdapterConfig(
 }
 
 const DEFAULT_RUNTIME: DiscordRuntime = {
-  createAdapter(config, userName) {
+  async createAdapter(config, userName) {
     return createDiscordAdapter(
-      resolveDiscordAdapterConfig(config, userName),
+      await resolveDiscordAdapterConfig(config, userName),
     ) as unknown as DiscordAdapterApi;
   },
   createChat(adapter, userName) {
@@ -230,7 +279,9 @@ export class DiscordProviderAdapter implements ProviderAdapter {
   readonly #seenMessages = new Set<string>();
   readonly #userName: string;
   #adapter: DiscordAdapterApi | null = null;
+  #adapterPromise: Promise<DiscordAdapterApi> | null = null;
   #chat: DiscordChat | null = null;
+  #chatPromise: Promise<DiscordChat> | null = null;
   #gatewayAbort: AbortController | null = null;
   #gatewayTask: Promise<unknown> | null = null;
   #server: StartedWebhookServer | null = null;
@@ -294,7 +345,8 @@ export class DiscordProviderAdapter implements ProviderAdapter {
 
   async probe(context: ProviderContext): Promise<ProbeResult> {
     try {
-      await this.#getChat().initialize();
+      const chat = await this.#getChat();
+      await chat.initialize();
       const server = await this.#ensureWebhookServer(true);
       const target = this.normalizeTarget(context.fixture.target);
       const details = [
@@ -307,13 +359,16 @@ export class DiscordProviderAdapter implements ProviderAdapter {
       }
 
       if (target.threadId) {
-        await this.#getAdapter().fetchThread(target.threadId);
+        const adapter = await this.#getAdapter();
+        await adapter.fetchThread(target.threadId);
         details.push(`thread reachable ${target.threadId}`);
       } else if (target.channelId) {
-        await this.#getAdapter().fetchChannelInfo(target.channelId);
+        const adapter = await this.#getAdapter();
+        await adapter.fetchChannelInfo(target.channelId);
         details.push(`channel reachable ${target.channelId}`);
       } else {
-        const threadId = await this.#getAdapter().openDM(target.id);
+        const adapter = await this.#getAdapter();
+        const threadId = await adapter.openDM(target.id);
         details.push(`dm reachable ${threadId}`);
       }
 
@@ -325,11 +380,12 @@ export class DiscordProviderAdapter implements ProviderAdapter {
 
   async send(context: SendContext): Promise<SendResult> {
     try {
-      const chat = this.#getChat();
+      const chat = await this.#getChat();
       await chat.initialize();
       const threadId = await this.#resolveThreadId(context.fixture.target);
       await chat.getState().subscribe(threadId);
-      const sent = await this.#getAdapter().postMessage(threadId, context.text);
+      const adapter = await this.#getAdapter();
+      const sent = await adapter.postMessage(threadId, context.text);
       return {
         accepted: true,
         messageId: sent.id,
@@ -347,7 +403,8 @@ export class DiscordProviderAdapter implements ProviderAdapter {
   async waitForInbound(context: WaitContext): Promise<InboundEnvelope | null> {
     try {
       const target = this.normalizeTarget(context.fixture.target);
-      await this.#getChat().initialize();
+      const chat = await this.#getChat();
+      await chat.initialize();
       await this.#ensureWebhookServer(true);
       await this.#ensureGatewayListener();
       return (
@@ -372,7 +429,8 @@ export class DiscordProviderAdapter implements ProviderAdapter {
     const target = this.normalizeTarget(context.fixture.target);
     const expectedThreadId =
       target.threadId ?? target.channelId ?? (await this.#resolveThreadId(context.fixture.target));
-    await this.#getChat().initialize();
+    const chat = await this.#getChat();
+    await chat.initialize();
     await this.#ensureWebhookServer(false);
     await this.#ensureGatewayListener();
 
@@ -400,12 +458,7 @@ export class DiscordProviderAdapter implements ProviderAdapter {
     this.#server = null;
   }
 
-  #registerInboundHandlers(): void {
-    const chat = this.#chat;
-    if (!chat) {
-      return;
-    }
-
+  #registerInboundHandlers(chat: DiscordChat): void {
     const record = async (thread: DiscordThread, message: DiscordMessage) => {
       const key = `${thread.id}:${message.id}`;
       if (this.#seenMessages.has(key)) {
@@ -436,9 +489,10 @@ export class DiscordProviderAdapter implements ProviderAdapter {
     }
 
     try {
-      await this.#getChat().initialize();
+      const chat = await this.#getChat();
+      await chat.initialize();
       this.#server = await startWebhookServer({
-        handle: (request) => this.#getAdapter().handleWebhook(request),
+        handle: async (request) => (await this.#getAdapter()).handleWebhook(request),
         host: this.#config.discord?.webhook.host ?? "127.0.0.1",
         path: toWebhookPath(this.#config),
         port: this.#config.discord?.webhook.port ?? 8788,
@@ -466,7 +520,8 @@ export class DiscordProviderAdapter implements ProviderAdapter {
     }
 
     this.#gatewayAbort = new AbortController();
-    const response = await this.#getAdapter().startGatewayListener(
+    const adapter = await this.#getAdapter();
+    const response = await adapter.startGatewayListener(
       {
         waitUntil: (task) => {
           this.#gatewayTask = task.finally(() => {
@@ -497,23 +552,49 @@ export class DiscordProviderAdapter implements ProviderAdapter {
       return normalized.channelId;
     }
 
-    return this.#getAdapter().openDM(normalized.id);
+    const adapter = await this.#getAdapter();
+    return adapter.openDM(normalized.id);
   }
 
-  #getAdapter(): DiscordAdapterApi {
-    if (!this.#adapter) {
-      this.#adapter = this.#runtime.createAdapter(this.#config, this.#userName);
+  async #getAdapter(): Promise<DiscordAdapterApi> {
+    if (this.#adapter) {
+      return this.#adapter;
     }
 
-    return this.#adapter;
+    if (!this.#adapterPromise) {
+      this.#adapterPromise = Promise.resolve(
+        this.#runtime.createAdapter(this.#config, this.#userName),
+      )
+        .then((adapter) => {
+          this.#adapter = adapter;
+          return adapter;
+        })
+        .finally(() => {
+          this.#adapterPromise = null;
+        });
+    }
+
+    return this.#adapterPromise;
   }
 
-  #getChat(): DiscordChat {
-    if (!this.#chat) {
-      this.#chat = this.#runtime.createChat(this.#getAdapter(), this.#userName);
-      this.#registerInboundHandlers();
+  async #getChat(): Promise<DiscordChat> {
+    if (this.#chat) {
+      return this.#chat;
     }
 
-    return this.#chat;
+    if (!this.#chatPromise) {
+      this.#chatPromise = this.#getAdapter()
+        .then((adapter) => Promise.resolve(this.#runtime.createChat(adapter, this.#userName)))
+        .then((chat) => {
+          this.#chat = chat;
+          this.#registerInboundHandlers(chat);
+          return chat;
+        })
+        .finally(() => {
+          this.#chatPromise = null;
+        });
+    }
+
+    return this.#chatPromise;
   }
 }
